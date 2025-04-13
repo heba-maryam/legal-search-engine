@@ -24,7 +24,6 @@ try:
 except Exception as e:
     print("Failed to load pickle:", e)
 
-
 import streamlit as st
 import os
 import torch
@@ -71,14 +70,10 @@ def search_bm25(query, bm25, documents, metadata, top_k=10):
     top_k_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     results = []
     for idx in top_k_indices:
-        results.append({
-            "section": documents[idx],
-            "section_id": metadata[idx]["section_id"],
-            "score": scores[idx],
-            "case_name": metadata[idx]["case_name"],
-            "year": metadata[idx]["year"],
-            "file_name": metadata[idx]["file_name"]
-        })
+        result = metadata[idx].copy()
+        result["section"] = documents[idx]
+        result["score"] = scores[idx]
+        results.append(result)
     return results
 
 def rerank_with_legalbert(query, bm25_results, model, tokenizer):
@@ -103,7 +98,8 @@ def rerank_with_legalbert(query, bm25_results, model, tokenizer):
         key=lambda x: x[0],
         reverse=True
     )
-    return [{"score": s, **r} for s, r in reranked]
+    return [{"score": s * 100, **r} for s, r in reranked]
+
 
 def load_bm25_index(path):
     with open(path, "rb") as f:
@@ -152,42 +148,82 @@ def initialize():
     bm25 = load_bm25_index("bm25_index.pkl")
     return bm25, documents, metadata
 
-def search(query, top_k=5):
-    tokenized_query = preprocess_text(query)
-    bm25 = load_bm25_index("bm25_index.pkl")
-    scores = bm25.get_scores(tokenized_query)
-    documents, metadata = load_json_dataset("data/train.json")
-    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
-    results = [(metadata[i], scores[i]) for i in top_indices]
-    return results
-
-# --- Streamlit UI ---
 
 
-st.image("/Users/tanvipundir/Downloads/search_engine/image1.png", width=200, use_container_width=False)
-st.title("Legal Document Retrieval using BM25 + LegalBERT")
+def search_and_rerank(query, top_k=10):
+    bm25, documents, metadata = initialize()
+    bm25_results = search_bm25(query, bm25, documents, metadata, top_k=top_k)
+    reranked_results = rerank_with_legalbert(query, bm25_results, model, tokenizer)
+    return reranked_results
 
-query = st.text_area(
-    "Enter a legal question/query:", 
-    "", 
-    height=100,  # You can increase if you want more vertical space
-    placeholder="Type your legal query here..."
-)
 
-if query:
-    with st.spinner("Processing..."):
-        bm25, documents, metadata = initialize()
-        results = search(query, top_k=5)
-    
 
-    for i, (entry, score) in enumerate(results):
-        st.markdown(f"### 🔹 Result {i + 1} — Score: {score:.2f}")
+
+
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    st.image("https://github.com/heba-maryam/legal-search-engine/blob/master/image1.png?raw=true", width=250)
+
+# Smaller title
+st.markdown("##### 🔍 Legal Document Retrieval using **BM25 + LegalBERT**")
+
+# Stylish dynamic search input
+st.markdown("### Type your legal query below:")
+
+# Search input column layout
+search_col1, search_col2 = st.columns([12, 1])
+with search_col1:
+    query = st.text_area(" ", height=80, placeholder="Enter a legal question/query...", label_visibility="collapsed")
+with search_col2:
+    search_clicked = st.button("🔍", use_container_width=True)
+
+# Trigger search on enter or button click
+if query and (search_clicked or query):
+    with st.spinner("🔎 Searching and reranking using LegalBERT..."):
+        results = search_and_rerank(query, top_k=10)
+
+    # Ensure results are sorted by LegalBERT score
+    results = sorted(results, key=lambda x: x['score'], reverse=True)
+
+    # Display the most relevant result
+    st.markdown(f"### **Most Relevant Result** — LegalBERT Score: {results[0]['score']:.2f}")
+    with st.expander("📄 Document Information", expanded=True):
+        st.markdown(
+            f"""
+            **Case Number:** {results[0].get('Case Number', 'N/A')}<br>
+            **Petitioner:** {results[0].get('Petitioner', 'N/A')}<br>
+            **Respondent:** {results[0].get('Respondent', 'N/A')}<br>
+            **Date of Judgment:** {results[0].get('Date of Judgment', 'N/A')}<br>
+            **Bench:** {results[0].get('Bench', 'N/A')}
+            """, 
+            unsafe_allow_html=True
+        )
+
+    with st.expander("📘 Document Preview"):
+        st.markdown(
+            f"<pre>{results[0].get('section', '')[:2500]}...</pre>",
+            unsafe_allow_html=True
+        )
+
+    # Display other relevant results under "More Relevant Results"
+    st.markdown("### More Relevant Results")
+
+    for i, entry in enumerate(results[1:], 1):  # Skip the first result since it's already displayed
+        st.markdown(f"### 🔹 Result {i + 1} — LegalBERT Score: {entry['score']:.2f}")
         with st.expander("📄 Document Information", expanded=True):
-            st.write(f"**Case Number:** {entry.get('Case Number', 'N/A')}")
-            st.write(f"**Petitioner:** {entry.get('Petitioner', 'N/A')}")
-            st.write(f"**Respondent:** {entry.get('Respondent', 'N/A')}")
-            st.write(f"**Date of Judgment:** {entry.get('Date of Judgment', 'N/A')}")
-            st.write(f"**Bench:** {entry.get('Bench', 'N/A')}")
-        with st.expander("📘 Document Preview"):
-            st.text(entry.get("FileData", "")[:1500] + "...")
+            st.markdown(
+                f"""
+                **Case Number:** {entry.get('Case Number', 'N/A')}<br>
+                **Petitioner:** {entry.get('Petitioner', 'N/A')}<br>
+                **Respondent:** {entry.get('Respondent', 'N/A')}<br>
+                **Date of Judgment:** {entry.get('Date of Judgment', 'N/A')}<br>
+                **Bench:** {entry.get('Bench', 'N/A')}
+                """, 
+                unsafe_allow_html=True
+            )
 
+        with st.expander("📘 Document Preview"):
+            st.markdown(
+                f"<pre>{entry.get('section', '')[:2500]}...</pre>",
+                unsafe_allow_html=True
+            )
