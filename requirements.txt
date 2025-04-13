@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+scikit-learn
+transformers
+torch
+gdown
+rank_bm25
+nltk
+matplotlib
