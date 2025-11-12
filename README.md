@@ -7,6 +7,8 @@ The retrieval pipeline begins with BM25, which provides fast keyword-based match
 The full workflow includes PDF extraction, preprocessing, indexing, retrieval with BM25, and re-ranking with LegalBERT, followed by evaluation using metrics such as Precision@5, Recall@5, MRR and nDCG. While BM25 performed strongly, the re-ranking model’s effectiveness was limited by dataset size and domain mismatch, highlighting areas for future improvement.
 
 More details, including the trained models and dataset used, can be found here:
+
+
 Trained models: https://www.kaggle.com/models/santos44/ir_qlegal/
 
 
