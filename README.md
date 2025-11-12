@@ -8,4 +8,6 @@ The full workflow includes PDF extraction, preprocessing, indexing, retrieval wi
 
 More details, including the trained models and dataset used, can be found here:
 Trained models: https://www.kaggle.com/models/santos44/ir_qlegal/
+
+
 Dataset: https://www.kaggle.com/datasets/santos44/ir2025-qlegal/data
